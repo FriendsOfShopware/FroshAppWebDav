@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/trunk/src/Core/Framework/App/Manifest/Schema/manifest-1.0.xsd">
+    <meta>
+        <name>FroshWebDav</name>
+        <label>StockX Integration</label>
+        <label lang="de-DE">StockX Integration</label>
+        <description>Shows bids of items</description>
+        <description lang="de-DE">Shows bids of items</description>
+        <author>Shyim</author>
+        <copyright>Shyim</copyright>
+        <version>0.0.3</version>
+        <license>MIT</license>
+    </meta>
+    <setup>
+        <registrationUrl>https://froshwebdav.shyim.workers.dev/authorize</registrationUrl>
+        <secret>aClGgcSrikPWLI674NI3R84clyC7gyOS</secret>
+    </setup>
+    <permissions>
+        <read>media</read>
+        <read>media_folder</read>
+        <create>media</create>
+        <create>media_folder</create>
+        <update>media</update>
+        <update>media_folder</update>
+        <delete>media</delete>
+        <delete>media_folder</delete>
+    </permissions>
+</manifest>

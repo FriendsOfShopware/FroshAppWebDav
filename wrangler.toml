@@ -1,0 +1,18 @@
+name = "froshwebdav"
+type = "javascript"
+zone_id = ""
+route = ""
+workers_dev = true
+compatibility_date = "2022-03-04"
+account_id = "963ff7fb9c523564b5f3a398ab39d488"
+
+[build]
+command = "npm run build"
+
+[build.upload]
+format = "service-worker"
+
+[[kv_namespaces]]
+binding = "shopStorage"
+id = "f2112b386a2b40119f21ce1b4c46e5f8"
+preview_id = "f2112b386a2b40119f21ce1b4c46e5f8"

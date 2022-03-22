@@ -8,7 +8,7 @@
         <description lang="de-DE">Shows bids of items</description>
         <author>Shyim</author>
         <copyright>Shyim</copyright>
-        <version>0.0.3</version>
+        <version>0.0.5</version>
         <license>MIT</license>
     </meta>
     <setup>
@@ -20,9 +20,11 @@
         <read>media_folder</read>
         <create>media</create>
         <create>media_folder</create>
+        <create>media_folder_configuration</create>
         <update>media</update>
         <update>media_folder</update>
         <delete>media</delete>
         <delete>media_folder</delete>
+        <delete>media_thumbnail</delete>
     </permissions>
 </manifest>

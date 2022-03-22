@@ -13,10 +13,11 @@ const cfg: Config = {
     authorizeCallbackUrl: 'https://froshwebdav.shyim.workers.dev/authorize/callback'
 };
 
+const clientCache: any  = [];
+
 export async function handleRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    // This requires that an KV storage has been bound to shopStorage
     // @ts-ignore
     const app = new App(cfg, new CloudflareShopRepository(globalThis.shopStorage), new WebCryptoHmacSigner());
 
@@ -39,7 +40,12 @@ export async function handleRequest(request: Request): Promise<Response> {
         });
     }
 
-    const client = new HttpClient(shop);
+    let client : HttpClient;
+    if (typeof clientCache[shop.id] !== 'undefined') {
+        client = clientCache[shop.id] as HttpClient;
+    } else {
+        client = clientCache[shop.id] = new HttpClient(shop);
+    }
 
     let response = new Response(null, {
         status: 405,
@@ -174,6 +180,176 @@ export async function handleRequest(request: Request): Promise<Response> {
                 Range: request.headers.get('Range') || ''
             }
         })
+    }
+
+    if (request.method === 'MKCOL') {
+        let path = url.pathname.substring(1);
+        const parts = path.split('/').map(part => decodeURIComponent(part));
+
+        const folderName = (parts.pop() as string);
+
+        let root: Folder|null = await getFolderTree(client);
+
+        if (parts.length) {
+            root = root.findFolderByPath(parts);
+
+            if (root === null) {
+                return new Response('cannot find folder by path', {
+                    status: 404
+                })
+            }
+        }
+
+        try {
+            await client.post('/media-folder', {
+                parentId: root.id,
+                name: folderName,
+                configuration: {
+                    private: false
+                }
+            });
+        } catch (e: any) {
+            // return new Response(JSON.stringify({
+            //     err: e.response.statusCode,
+            //     foo: false
+            // }));
+        }
+
+        return new Response('', {
+            status: 201,
+            statusText: 'Created'
+        });
+    }
+
+    if (request.method === 'DELETE') {
+        let path = url.pathname.substring(1);
+        if (path.endsWith('/')) {
+            path = path.substring(0, path.length - 1);
+        }
+
+        const parts = path.split('/').map(part => decodeURIComponent(part));
+
+        const itenName = (parts.pop() as string);
+
+        let root: Folder|null = await getFolderTree(client);
+
+        if (parts.length) {
+            root = root.findFolderByPath(parts);
+
+            if (root === null) {
+                return new Response('cannot find folder by path', {
+                    status: 404
+                })
+            }
+        }
+
+        if (root.findFolder(itenName)) {
+            try {
+                await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`);
+            } catch (e) {
+                //return new Response(JSON.stringify(e));
+            }
+
+            // Delete all files in that folder and recursive
+        } else {
+            const fileSplits = itenName.split('.');
+            const fileExtension = fileSplits.pop();
+            const fileName = fileSplits.join('.');
+
+            const result = await client.post('/search-ids/media', {
+                filter: [
+                    {
+                        type: 'multi',
+                        operator: 'and',
+                        queries: [
+                            {
+                                type: 'equals',
+                                field: 'mediaFolderId',
+                                value: root.id,
+                            },
+                            {
+                                type: 'equals',
+                                field: 'fileName',
+                                value: fileName
+                            },
+                            {
+                                type: 'equals',
+                                field: 'fileExtension',
+                                value: fileExtension
+                            }
+                        ]
+                    }
+                ],
+            });
+
+            if (result.body.total !== 1) {
+                return new Response('cannot find file by name', {
+                    status: 404
+                });
+            }
+
+            try {
+                await client.delete(`/media/${result.body.data[0]}`);
+            } catch (e: any) {
+                if (typeof e.response !== 'undefined') {
+                    if (e.response?.body?.errors[0]?.detail.indexOf('An exception occurred while executing') !== -1) {
+                        // that media is locked somehow
+                        return new Response(e.response?.body?.errors[0]?.detail, {
+                            status: 423,
+                        })
+                    }
+                }
+            }
+        }
+
+        return new Response('', {
+            status: 204,
+            statusText: 'No Content'
+        });
+    }
+
+    if (request.method === 'PUT') {
+        let path = url.pathname.substring(1);
+        const parts = path.split('/').map(part => decodeURIComponent(part));
+
+        const fileNameComplete = (parts.pop() as string);
+
+        let root: Folder|null = await getFolderTree(client);
+
+        if (parts.length) {
+            root = root.findFolderByPath(parts);
+
+            if (root === null) {
+                return new Response('cannot find folder by path', {
+                    status: 404
+                })
+            }
+        }
+
+        const fileSplits = fileNameComplete.split('.');
+        const fileExtension = fileSplits.pop() as string;
+        const fileName = fileSplits.join('.');
+
+        const newMediaElement = await client.post('/media?_response=true', {
+            mediaFolderId: root.id,
+        });
+
+        const search = new URLSearchParams();
+        search.set('fileName', fileName);
+        search.set('extension', fileExtension);
+
+        const resp = await fetch(`${shop.shopUrl}/api/_action/media/${newMediaElement.body.data.id}/upload?${search.toString()}`, {
+            body: request.body,
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${await client.getToken()}`,
+                Accept: 'application/json',
+            }
+        })
+
+        return new Response(JSON.stringify(await resp.json()));
+
+        return new Response(JSON.stringify(resp));
     }
 
     return response;

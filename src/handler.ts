@@ -87,12 +87,14 @@ export async function handleRequest(request: Request): Promise<Response> {
         )
     }
 
-    //const shop = await getShopByAuth(request, app.repository);
-    const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
+    const shop = await getShopByAuth(request, app.repository);
 
     if (shop === null) {
         return new Response("cannot find shop by credentials", {
             status: HTTPCode.Unauthorized,
+            headers: {
+                'WWW-Authenticate': 'Basic realm="WebDav"'
+            }
         });
     }
 

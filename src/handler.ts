@@ -341,6 +341,30 @@ export async function handleRequest(request: Request): Promise<Response> {
         return new Response('', {status: HTTPCode.Created});
     }
 
+    if (request.method === 'MOVE') {
+        const targetUrl = new URL(request.headers.get('Destination') as string);
+
+        let {root, itenName} = await resolvePath(url.pathname, client);
+
+        if (root === null) {
+            return new Response('', {status: HTTPCode.NotFound});
+        }
+
+        // Source is a folder
+        if (root.findFolder(itenName)) {
+            const folder = root.findFolder(itenName) as Folder;
+            let {root: targetRoot, itenName: targetName} = await resolvePath(targetUrl.pathname, client);
+
+            await client.put(`/media-folder/${folder.id}`, {
+                parentId: targetRoot?.id,
+                name: targetName
+            });
+            
+        }
+
+        return new Response('', {status: HTTPCode.Created});
+    }
+
     return response;
 }
 

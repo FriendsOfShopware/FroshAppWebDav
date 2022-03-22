@@ -6,6 +6,10 @@ import { HttpClient } from "shopware-app-server-sdk/component/http-client";
 import XMLBuilder from "./utils/xml";
 import { getShopByAuth } from "./utils/auth";
 import { Folder, getFolderTree } from "./utils/tree";
+import { HTTPCode } from "./utils/enum";
+import { extractFileName, resolveRoot as resolvePath } from "./utils/path";
+import { getMedia, MediaEntity } from "./utils/api";
+import { getCacheKey, hasCacheKey, removeCacheKey, setCacheKey } from "./utils/cache";
 
 const cfg: Config = {
     appName: 'FroshWebDav',
@@ -16,6 +20,17 @@ const cfg: Config = {
 const clientCache: any  = [];
 
 export async function handleRequest(request: Request): Promise<Response> {
+    // deliver options fast as possible
+    if (request.method === 'OPTIONS') {
+        return new Response(null, {
+            headers: {
+                'Allow': 'OPTIONS, DELETE, COPY, MOVE, PROPFIND',
+                'Ms-Author-Via': 'DAV',
+                'DAV': '1, 2',
+            }
+        });
+    }
+
     const url = new URL(request.url);
 
     // @ts-ignore
@@ -31,12 +46,53 @@ export async function handleRequest(request: Request): Promise<Response> {
         return await convertResponse(await app.registration.authorize(req));
     }
 
+    // We don't store OS specific files. Stop them to reach our backend
+    if (url.pathname.endsWith('/desktop.ini') || url.pathname.endsWith('/.DS_Store') || url.pathname.endsWith('/Thumbs.db')) {
+        return new Response('', {
+            status: HTTPCode.NotFound,
+        });
+    }
+
+    // We don't support it, but some stupid clients like Windows Explorer still does it
+    if (request.method === 'LOCK') {
+        return new Response(`<?xml version="1.0" encoding="utf-8"?>
+        <D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock>
+            <D:locktype><D:write/></D:locktype>
+            <D:lockscope><D:exclusive/></D:lockscope>
+            <D:depth>infinity</D:depth>
+            <D:owner><D:href>client</D:href></D:owner>
+            <D:timeout>Second-3600</D:timeout>
+            <D:locktoken><D:href>1647962846</D:href></D:locktoken>
+            <D:lockroot><D:href>/00f1628adad3b4d284f5ed009ddccbdd.jpg</D:href></D:lockroot>
+        </D:activelock></D:lockdiscovery></D:prop>`, {
+            status: HTTPCode.OK,
+            headers: {
+                'Lock-Token': '<1647962846>'
+            }
+        });
+    }
+
+    if (request.method === 'UNLOCK') {
+        return new Response(null, {
+            status: HTTPCode.NoContent,
+        })
+    }
+
+    if (request.method === 'PROPPATCH') {
+        return new Response(
+            `<?xml version="1.0" encoding="UTF-8"?><D:multistatus xmlns:D="DAV:"><D:response><D:href>${url.pathname}</D:href><D:propstat><D:prop><Win32CreationTime xmlns="urn:schemas-microsoft-com:"></Win32CreationTime><Win32LastAccessTime xmlns="urn:schemas-microsoft-com:"></Win32LastAccessTime><Win32LastModifiedTime xmlns="urn:schemas-microsoft-com:"></Win32LastModifiedTime><Win32FileAttributes xmlns="urn:schemas-microsoft-com:"></Win32FileAttributes></D:prop><D:status>HTTP/1.1 403 Forbidden</D:status></D:propstat></D:response></D:multistatus>`,
+            {
+                status: HTTPCode.MultiStatus,
+            } 
+        )
+    }
+
     //const shop = await getShopByAuth(request, app.repository);
     const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
 
     if (shop === null) {
         return new Response("cannot find shop by credentials", {
-            status: 401
+            status: HTTPCode.Unauthorized,
         });
     }
 
@@ -48,287 +104,211 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     let response = new Response(null, {
-        status: 405,
+        status: HTTPCode.MethodNotAllowed,
     });
 
-    if (request.method === 'OPTIONS') {
-        return new Response(null, {
-            headers: {
-                'Allow': 'OPTIONS, LOCK, DELETE, PROPPATCH, COPY, MOVE, UNLOCK, PROPFIND',
-                'Ms-Author-Via': 'DAV',
-                'DAV': '1, 2',
-            }
-        });
-    }
-
     if (request.method === 'PROPFIND') {
-        let path = url.pathname.substring(1);
-        if (path.endsWith('/')) {
-            path = path.substring(0, path.length - 1);
+        let {root, itenName} = await resolvePath(url.pathname, client);
+
+        if (root === null) {
+            return new Response('', {status: HTTPCode.NotFound});
         }
 
         const depth = parseInt(request.headers.get('depth') || '1');
 
-        let root: Folder|null = await getFolderTree(client);
-
-        if (path.length) {
-            const parts = path.split('/').map(part => decodeURIComponent(part));
-
-            root = root.findFolderByPath(parts);
-
-            if (root === null) {
-                return new Response('cannot find folder by path', {
-                    status: 404
-                })
-            }
-        }
-
         const builder = new XMLBuilder('D:multistatus', {
             'xmlns:D': 'DAV:',
-        })
+        });
 
-        builder.add(buildFolder(root))
-
-        if (depth > 0) {
-            for (const folder of root.children) {
-                builder.add(buildFolder(folder))
+        // Requested find is a folder
+        if (itenName === '' || root.findFolder(itenName)) {
+            if (root.findFolder(itenName)) {
+                root = root.findFolder(itenName) as Folder;
             }
-    
-            const res = await client.post('/search/media', {
-                filter: [
-                    {
-                        type: 'equals',
-                        field: 'mediaFolderId',
-                        value: root.id,
-                    }
-                ]
-            });
-    
-            for (const result of res.body.data) {
-                builder.add(buildFile(root, result));
-            }
-        }
 
-        return new Response(builder.build(), {
-            status: 207,
-            headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-        })
-    }
+            builder.add(buildFolder(root))
 
-    if (request.method === 'GET') {
-        let path = url.pathname.substring(1);
-        const parts = path.split('/').map(part => decodeURIComponent(part));
-
-        const fileNameComplete = (parts.pop() as string);
-        const fileSplits = fileNameComplete.split('.');
-
-        if (fileSplits.length === 1) {
-            return new Response('invalid file name', {
-                status: 500
-            });
-        }
-
-        let root: Folder|null = await getFolderTree(client);
-
-        if (parts.length) {
-            root = root.findFolderByPath(parts);
-
-            if (root === null) {
-                return new Response('cannot find folder by path', {
-                    status: 404
-                })
-            }
-        }
-
-        const fileExtension = fileSplits.pop();
-        const fileName = fileSplits.join('.');
-
-        const res = await client.post('/search/media', {
-            filter: [
-                {
-                    type: 'multi',
-                    operator: 'and',
-                    queries: [
+            if (depth > 0) {
+                for (const folder of root.children) {
+                    builder.add(buildFolder(folder))
+                }
+        
+                const res = await client.post('/search/media', {
+                    filter: [
                         {
                             type: 'equals',
                             field: 'mediaFolderId',
                             value: root.id,
-                        },
-                        {
-                            type: 'equals',
-                            field: 'fileName',
-                            value: fileName
-                        },
-                        {
-                            type: 'equals',
-                            field: 'fileExtension',
-                            value: fileExtension
                         }
                     ]
-                }
-            ],
-        });
+                });
+        
+                for (const result of res.body.data) {
+                    if (result.fileName === null) {
+                        continue;
+                    }
 
-        if (res.body.data.length === 0) {
-            return new Response('cannot find by name', {
-                status: 500
-            });
+                    builder.add(buildFile(root, result));
+                }
+            }
+        } else {
+            let media : MediaEntity|null = null;
+
+            if (extractFileName(itenName).fileName === '') {
+                return new Response('', {status: HTTPCode.NotFound});
+            }
+
+            if (hasCacheKey(shop.id, itenName)) {
+                media = getCacheKey(shop.id, itenName);
+
+                //removeCacheKey(shop.id, itenName);
+            } else {
+                media = await getMedia(client, root.id, itenName);
+            }
+
+            if (media == null) {
+                return new Response('', {status: HTTPCode.NotFound});
+            }
+
+            builder.add(buildFile(root, media));
         }
 
-        return await fetch(res.body.data[0].url, {
-            headers: {
-                Range: request.headers.get('Range') || ''
-            }
+        return new Response(builder.build(), {
+            status: HTTPCode.MultiStatus,
+            headers: { 'Content-Type': 'text/xml; charset=utf-8' },
         })
     }
 
-    if (request.method === 'MKCOL') {
-        let path = url.pathname.substring(1);
-        const parts = path.split('/').map(part => decodeURIComponent(part));
+    if (request.method === 'GET' || request.method === 'HEAD') {
+        const {root, itenName} = await resolvePath(url.pathname, client);
 
-        const folderName = (parts.pop() as string);
+        if (root === null) {
+            return new Response('', {status: HTTPCode.NotFound});
+        }
 
-        let root: Folder|null = await getFolderTree(client);
+        let media : MediaEntity|null = null;
 
-        if (parts.length) {
-            root = root.findFolderByPath(parts);
+        if (hasCacheKey(shop.id, itenName)) {
+            media = getCacheKey(shop.id, itenName);
 
-            if (root === null) {
-                return new Response('cannot find folder by path', {
-                    status: 404
-                })
+            removeCacheKey(shop.id, itenName);
+        } else {
+            media = await getMedia(client, root.id, itenName);
+        }
+
+        if (media === null) {
+            return new Response('', {status: HTTPCode.NotFound});
+        }
+
+        if (request.method === 'GET') {
+            if (media.url === 'dummy') {
+                return new Response('');
             }
+
+            return await fetch(media.url, {
+                headers: {
+                    Range: request.headers.get('Range') || ''
+                }
+            })
+        } else {
+            return new Response('', {
+                status: HTTPCode.OK,
+                headers: {
+                    'content-length': media.fileSize.toString()
+                }
+            })
+        }
+    }
+
+    if (request.method === 'MKCOL') {
+        const {root, itenName} = await resolvePath(url.pathname, client);
+
+        if (root === null) {
+            return new Response('', {status: HTTPCode.NotFound});
         }
 
-        try {
-            await client.post('/media-folder', {
-                parentId: root.id,
-                name: folderName,
-                configuration: {
-                    private: false
-                }
-            });
-        } catch (e: any) {
-            // return new Response(JSON.stringify({
-            //     err: e.response.statusCode,
-            //     foo: false
-            // }));
+        if (root.findFolder(itenName) !== null) {
+            return new Response('', {status: HTTPCode.Conflict});
         }
+
+        await client.post('/media-folder', {
+            parentId: root.id,
+            name: itenName,
+            configuration: {
+                private: false
+            }
+        });
 
         return new Response('', {
-            status: 201,
-            statusText: 'Created'
+            status: HTTPCode.Created,
         });
     }
 
     if (request.method === 'DELETE') {
-        let path = url.pathname.substring(1);
-        if (path.endsWith('/')) {
-            path = path.substring(0, path.length - 1);
-        }
+        const {root, itenName} = await resolvePath(url.pathname, client);
 
-        const parts = path.split('/').map(part => decodeURIComponent(part));
-
-        const itenName = (parts.pop() as string);
-
-        let root: Folder|null = await getFolderTree(client);
-
-        if (parts.length) {
-            root = root.findFolderByPath(parts);
-
-            if (root === null) {
-                return new Response('cannot find folder by path', {
-                    status: 404
-                })
-            }
+        if (root === null) {
+            return new Response('', {status: HTTPCode.NotFound});
         }
 
         if (root.findFolder(itenName)) {
-            try {
-                await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`);
-            } catch (e) {
-                //return new Response(JSON.stringify(e));
-            }
+            await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`);
 
             // Delete all files in that folder and recursive
         } else {
-            const fileSplits = itenName.split('.');
-            const fileExtension = fileSplits.pop();
-            const fileName = fileSplits.join('.');
+            const media = await getMedia(client, root.id, itenName);
 
-            const result = await client.post('/search-ids/media', {
-                filter: [
-                    {
-                        type: 'multi',
-                        operator: 'and',
-                        queries: [
-                            {
-                                type: 'equals',
-                                field: 'mediaFolderId',
-                                value: root.id,
-                            },
-                            {
-                                type: 'equals',
-                                field: 'fileName',
-                                value: fileName
-                            },
-                            {
-                                type: 'equals',
-                                field: 'fileExtension',
-                                value: fileExtension
-                            }
-                        ]
-                    }
-                ],
-            });
-
-            if (result.body.total !== 1) {
+            if (media === null) {
                 return new Response('cannot find file by name', {
-                    status: 404
+                    status: HTTPCode.NotFound,
                 });
             }
 
             try {
-                await client.delete(`/media/${result.body.data[0]}`);
+                await client.delete(`/media/${media.id}`);
             } catch (e: any) {
                 if (typeof e.response !== 'undefined') {
                     if (e.response?.body?.errors[0]?.detail.indexOf('An exception occurred while executing') !== -1) {
                         // that media is locked somehow
                         return new Response(e.response?.body?.errors[0]?.detail, {
-                            status: 423,
+                            status: HTTPCode.Locked,
                         })
                     }
                 }
             }
         }
 
-        return new Response('', {
-            status: 204,
-            statusText: 'No Content'
+        return new Response(null, {
+            status: HTTPCode.NoContent,
         });
     }
 
     if (request.method === 'PUT') {
-        let path = url.pathname.substring(1);
-        const parts = path.split('/').map(part => decodeURIComponent(part));
+        const {root, itenName} = await resolvePath(url.pathname, client);
 
-        const fileNameComplete = (parts.pop() as string);
-
-        let root: Folder|null = await getFolderTree(client);
-
-        if (parts.length) {
-            root = root.findFolderByPath(parts);
-
-            if (root === null) {
-                return new Response('cannot find folder by path', {
-                    status: 404
-                })
-            }
+        if (root === null) {
+            return new Response('', {status: HTTPCode.NotFound});
         }
 
-        const fileSplits = fileNameComplete.split('.');
-        const fileExtension = fileSplits.pop() as string;
-        const fileName = fileSplits.join('.');
+        const {fileName, fileExtension} = extractFileName(itenName);
+
+        // The webdav client wants to create a empty file and later write here again.
+        // We can't create a file at the remote with an empty body
+        if (request.headers.get('content-length')?.toString() === '0') {
+            setCacheKey(shop.id, itenName, {
+                id: 'dummy',
+                fileName,
+                fileExtension,
+                uploadedAt: 'Tue, 22 Mar 2022 15:27:14 GMT',
+                mimeType: 'text/plain',
+                url: 'dummy',
+                fileSize: 0,
+            });
+
+            return new Response('', {status: HTTPCode.Created});
+        }
+
+        removeCacheKey(shop.id, itenName);
 
         const newMediaElement = await client.post('/media?_response=true', {
             mediaFolderId: root.id,
@@ -345,11 +325,20 @@ export async function handleRequest(request: Request): Promise<Response> {
                 Authorization: `Bearer ${await client.getToken()}`,
                 Accept: 'application/json',
             }
-        })
+        });
 
-        return new Response(JSON.stringify(await resp.json()));
+        if (!resp.ok) {
+            // Cleanup empty media item
+            try {
+                await client.delete(`/media/${newMediaElement.body.data.id}`);
+            } catch (e){}
 
-        return new Response(JSON.stringify(resp));
+            return new Response('conflict', {
+                status: HTTPCode.BadRequest,
+            })
+        }
+
+        return new Response('', {status: HTTPCode.Created});
     }
 
     return response;
@@ -370,13 +359,6 @@ function buildFile(folder: Folder, file: any): XMLBuilder {
     prop.elem('D:getcontentlength', file.fileSize)
     prop.elem('D:getcontenttype', file.mimeType)
 
-    const lock = prop.elem('D:supportedlock').elem('D:lockentry', undefined, {
-        'xmlns:D': 'DAV:',
-    });
-
-    lock.elem('D:lockscope').elem('D:exclusive');
-    lock.elem('D:locktype').elem('D:write');
-
     return builder
 }
 
@@ -390,13 +372,6 @@ function buildFolder(folder: Folder): XMLBuilder {
     prop.elem('D:displayname', folder.name)
     const resourceType = prop.elem('D:resourcetype')
     resourceType.elem('D:collection', undefined, {'xmlns:D': 'DAV:'})
-
-    const lock = prop.elem('D:supportedlock', undefined, {
-        'xmlns:D': 'DAV:',
-    });
-
-    lock.elem('D:lockscope').elem('D:exclusive');
-    lock.elem('D:locktype').elem('D:write');
 
     return builder
 }

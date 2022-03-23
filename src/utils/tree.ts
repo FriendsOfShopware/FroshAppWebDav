@@ -110,6 +110,10 @@ export async function getFolderTree(client: HttpClient): Promise<Folder>
                 otherChild.parent = child;
             }
         }
+
+        if (child.parentId === null) {
+            child.parent = root;
+        }
     }
 
     // Strip all non parentId to root

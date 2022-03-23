@@ -46,6 +46,15 @@ export async function handleRequest(request: Request): Promise<Response> {
         return await convertResponse(await app.registration.authorize(req));
     }
 
+    if (url.pathname.startsWith('/hook/deleted')) {
+        const req = await convertRequest(request);
+        const source = await app.contextResolver.fromSource(req);
+
+        await app.repository.deleteShop(source.shop);
+
+        return new Response(null, {status: HTTPCode.NoContent});
+    }
+
     if (url.pathname.startsWith('/module/webdavConfig')) {
         const req = await convertRequest(request);
         const ctx = await app.contextResolver.fromModule(req);

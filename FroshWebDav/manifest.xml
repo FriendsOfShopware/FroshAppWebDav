@@ -8,7 +8,7 @@
         <description lang="de-DE">Media Manager via WebDav zugreifen</description>
         <author>Shyim</author>
         <copyright>Shyim</copyright>
-        <version>0.0.8</version>
+        <version>0.0.9</version>
         <license>MIT</license>
     </meta>
     <setup>
@@ -37,4 +37,7 @@
             <label lang="de-DE">Config</label>
         </module>
     </admin>
+    <webhooks>
+        <webhook name="appLifecycleDeleted" url="https://froshwebdav.shyim.workers.dev/hook/deleted" event="app.deleted"/>
+    </webhooks>
 </manifest>

@@ -363,15 +363,21 @@ export async function handleRequest(request: Request): Promise<Response> {
 
         removeCacheKey(shop.id, itenName);
 
-        const newMediaElement = await client.post('/media?_response=true', {
-            mediaFolderId: root.id,
-        });
+        let media = await getMedia(client, root.id, itenName);
+
+        if (media === null) {
+            const newMediaElement = await client.post('/media?_response=true', {
+                mediaFolderId: root.id,
+            });
+
+            media = newMediaElement.body.data as MediaEntity
+        }
 
         const search = new URLSearchParams();
         search.set('fileName', fileName);
         search.set('extension', fileExtension);
 
-        const resp = await fetch(`${shop.shopUrl}/api/_action/media/${newMediaElement.body.data.id}/upload?${search.toString()}`, {
+        const resp = await fetch(`${shop.shopUrl}/api/_action/media/${media.id}/upload?${search.toString()}`, {
             body: request.body,
             method: 'POST',
             headers: {
@@ -383,7 +389,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         if (!resp.ok) {
             // Cleanup empty media item
             try {
-                await client.delete(`/media/${newMediaElement.body.data.id}`);
+                await client.delete(`/media/${media.id}`);
             } catch (e){}
 
             return new Response('conflict', {

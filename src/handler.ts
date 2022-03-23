@@ -215,6 +215,8 @@ export async function handleRequest(request: Request): Promise<Response> {
 
         if (root === null) {
             return new Response('', {status: HTTPCode.NotFound});
+        } else if (itenName === '') {
+            return new Response('', {status: HTTPCode.OK});
         }
 
         let media : MediaEntity|null = null;
@@ -229,7 +231,7 @@ export async function handleRequest(request: Request): Promise<Response> {
             }
 
             media = await getMedia(client, root.id, itenName);
-        }     
+        }
 
         if (media === null) {
             return new Response('', {status: HTTPCode.NotFound});

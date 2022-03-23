@@ -56,6 +56,12 @@ export class Folder {
         let path = '';
 
         while (cur != null) {
+            // If we reached the root, skip
+            if (cur.id === null) {
+                cur = cur.parent;
+                continue;
+            }
+
             path = `/${encodeURIComponent(cur.name)}${path}`;
             cur = cur.parent;
         }

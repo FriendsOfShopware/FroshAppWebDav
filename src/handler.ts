@@ -10,6 +10,8 @@ import { HTTPCode } from "./utils/enum";
 import { extractFileName, resolveRoot as resolvePath, resolveRootOnFolder } from "./utils/path";
 import { getMedia, MediaEntity } from "./utils/api";
 import { getCacheKey, hasCacheKey, removeCacheKey, setCacheKey } from "./utils/cache";
+import { Shop } from "shopware-app-server-sdk/shop";
+import { generateRandomString } from "./utils/random";
 
 const cfg: Config = {
     appName: 'FroshWebDav',
@@ -17,7 +19,7 @@ const cfg: Config = {
     authorizeCallbackUrl: 'https://froshwebdav.shyim.workers.dev/authorize/callback'
 };
 
-const clientCache: any  = [];
+const clientCache: any = [];
 
 export async function handleRequest(request: Request): Promise<Response> {
     // deliver options fast as possible
@@ -30,7 +32,7 @@ export async function handleRequest(request: Request): Promise<Response> {
             }
         });
     }
-
+    
     const url = new URL(request.url);
 
     // @ts-ignore
@@ -38,7 +40,13 @@ export async function handleRequest(request: Request): Promise<Response> {
 
     if (url.pathname.startsWith('/authorize/callback')) {
         const req = await convertRequest(request);
-        return await convertResponse(await app.registration.authorizeCallback(req));
+
+        const successHandler = async (shop: Shop) => {
+            shop.customFields.password = generateRandomString(16);
+            shop.customFields.active = false;
+        };
+
+        return await convertResponse(await app.registration.authorizeCallback(req, successHandler));
     }
 
     if (url.pathname.startsWith('/authorize')) {
@@ -52,7 +60,18 @@ export async function handleRequest(request: Request): Promise<Response> {
 
         await app.repository.deleteShop(source.shop);
 
-        return new Response(null, {status: HTTPCode.NoContent});
+        return new Response(null, { status: HTTPCode.NoContent });
+    }
+
+    if (url.pathname.startsWith('/hook/activated') || url.pathname.startsWith('/hook/deactivated')) {
+        const req = await convertRequest(request);
+        const source = await app.contextResolver.fromSource(req);
+
+        source.shop.customFields.active = url.pathname.startsWith('/hook/activated');
+
+        await app.repository.updateShop(source.shop);
+
+        return new Response(null, { status: HTTPCode.NoContent });
     }
 
     if (url.pathname.startsWith('/module/webdavConfig')) {
@@ -65,22 +84,63 @@ export async function handleRequest(request: Request): Promise<Response> {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
 </head>
 <body>
-    <div><label>Server:</label> https://webdav.fos.gg</div>
-    <div><label>User:</label> ${ctx.shop.id}</div>
-    <div><label>Password:</label> ${ctx.shop.shopSecret}</div>
-    <button>Reset my credentials</buttom>
+    <div class="container">
+        <div class="card mb-4 mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Why WebDav?</h5>
+
+                <p class="card-text">
+                    WebDav lets you serve your Shopware Media Manager in your Operating System just like any other shared drive. Manage your files easily without going into the Shop administration, or handover the credentials to your designer and let him upload the files easily.
+
+                    <div class="alert alert-info" role="alert">
+                        This is a free service please don't abuse it.
+                    </div>
+                </p>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">My Credentials</h5>
+                <p class="card-text">
+                    <div><strong>Server:</strong> https://webdav.fos.gg</div>
+                    <div><strong>User:</strong> ${ctx.shop.id}</div>
+                    <div class="mb-1"><strong>Password:</strong> ${ctx.shop.customFields.password}</div>
+
+                    <div class="alert alert-info" role="alert">
+                        The password is auto generated. If you want to reset it, just reinstall the app.
+                    </div>
+                </p>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Known Shopware limitations</h5>
+                <p class="card-text">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">The file size is limited to your Shopware hosting settings</li>
+                        <li class="list-group-item">A file name can be only used once between all folders</li>
+                        <li class="list-group-item">Only following file types are supported: jpg, jpeg, png, webp, gif, svg, bmp, tiff, tif, eps, webm, mkv, flv, ogv, ogg, mov, mp4, avi, wmv, pdf, aac, mp3, wav, flac, oga, wma, txt, doc, ico</li>
+                    </ul>
+                </p>
+            </div>
+        </div>
+    </div>
+    
 
     <script>
     window.parent.postMessage('sw-app-loaded', '*');
     </script>
 </body>
 `, {
-    headers: {
-        "content-type": 'text/html',
-    }
-});
+            headers: {
+                "content-type": 'text/html',
+            }
+        });
     }
 
     // We don't store OS specific files. Stop them to reach our backend
@@ -120,12 +180,12 @@ export async function handleRequest(request: Request): Promise<Response> {
             `<?xml version="1.0" encoding="UTF-8"?><D:multistatus xmlns:D="DAV:"><D:response><D:href>${url.pathname}</D:href><D:propstat><D:prop><Win32CreationTime xmlns="urn:schemas-microsoft-com:"></Win32CreationTime><Win32LastAccessTime xmlns="urn:schemas-microsoft-com:"></Win32LastAccessTime><Win32LastModifiedTime xmlns="urn:schemas-microsoft-com:"></Win32LastModifiedTime><Win32FileAttributes xmlns="urn:schemas-microsoft-com:"></Win32FileAttributes></D:prop><D:status>HTTP/1.1 403 Forbidden</D:status></D:propstat></D:response></D:multistatus>`,
             {
                 status: HTTPCode.MultiStatus,
-            } 
+            }
         )
     }
 
-    const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
-    //const shop = await getShopByAuth(request, app.repository);
+    //const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
+    const shop = await getShopByAuth(request, app.repository);
 
     if (shop === null) {
         return new Response("cannot find shop by credentials", {
@@ -136,7 +196,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         });
     }
 
-    let client : HttpClient;
+    let client: HttpClient;
     if (typeof clientCache[shop.id] !== 'undefined') {
         client = clientCache[shop.id] as HttpClient;
     } else {
@@ -148,10 +208,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     });
 
     if (request.method === 'PROPFIND') {
-        let {root, itenName} = await resolvePath(url.pathname, client);
+        let { root, itenName } = await resolvePath(url.pathname, client);
 
         if (root === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         }
 
         const depth = parseInt(request.headers.get('depth') || '1');
@@ -172,7 +232,7 @@ export async function handleRequest(request: Request): Promise<Response> {
                 for (const folder of root.children) {
                     builder.add(buildFolder(folder))
                 }
-        
+
                 const res = await client.post('/search/media', {
                     filter: [
                         {
@@ -182,7 +242,7 @@ export async function handleRequest(request: Request): Promise<Response> {
                         }
                     ]
                 });
-        
+
                 for (const result of res.body.data) {
                     if (result.fileName === null) {
                         continue;
@@ -192,22 +252,20 @@ export async function handleRequest(request: Request): Promise<Response> {
                 }
             }
         } else {
-            let media : MediaEntity|null = null;
+            let media: MediaEntity | null = null;
 
             if (extractFileName(itenName).fileName === '') {
-                return new Response('', {status: HTTPCode.NotFound});
+                return new Response('', { status: HTTPCode.NotFound });
             }
 
             if (hasCacheKey(shop.id, itenName)) {
                 media = getCacheKey(shop.id, itenName);
-
-                //removeCacheKey(shop.id, itenName);
             } else {
                 media = await getMedia(client, root.id, itenName);
             }
 
             if (media == null) {
-                return new Response('', {status: HTTPCode.NotFound});
+                return new Response('', { status: HTTPCode.NotFound });
             }
 
             builder.add(buildFile(root, media));
@@ -220,15 +278,15 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === 'GET' || request.method === 'HEAD') {
-        const {root, itenName} = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client);
 
         if (root === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         } else if (itenName === '') {
-            return new Response('', {status: HTTPCode.OK});
+            return new Response('', { status: HTTPCode.OK });
         }
 
-        let media : MediaEntity|null = null;
+        let media: MediaEntity | null = null;
 
         if (hasCacheKey(shop.id, itenName)) {
             media = getCacheKey(shop.id, itenName);
@@ -236,14 +294,14 @@ export async function handleRequest(request: Request): Promise<Response> {
             removeCacheKey(shop.id, itenName);
         } else if (itenName.length) {
             if (extractFileName(itenName).fileName === '') {
-                return new Response('', {status: HTTPCode.NotFound});
+                return new Response('', { status: HTTPCode.NotFound });
             }
 
             media = await getMedia(client, root.id, itenName);
         }
 
         if (media === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         }
 
         if (request.method === 'GET') {
@@ -267,14 +325,14 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === 'MKCOL') {
-        const {root, itenName} = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client);
 
         if (root === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         }
 
         if (root.findFolder(itenName) !== null) {
-            return new Response('', {status: HTTPCode.Conflict});
+            return new Response('', { status: HTTPCode.Conflict });
         }
 
         await client.post('/media-folder', {
@@ -291,10 +349,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === 'DELETE') {
-        const {root, itenName} = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client);
 
         if (root === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         }
 
         if (root.findFolder(itenName)) {
@@ -346,13 +404,13 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === 'PUT') {
-        const {root, itenName} = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client);
 
         if (root === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         }
 
-        const {fileName, fileExtension} = extractFileName(itenName);
+        const { fileName, fileExtension } = extractFileName(itenName);
 
         // The webdav client wants to create a empty file and later write here again.
         // We can't create a file at the remote with an empty body
@@ -367,7 +425,7 @@ export async function handleRequest(request: Request): Promise<Response> {
                 fileSize: 0,
             });
 
-            return new Response('', {status: HTTPCode.Created});
+            return new Response('', { status: HTTPCode.Created });
         }
 
         removeCacheKey(shop.id, itenName);
@@ -399,54 +457,54 @@ export async function handleRequest(request: Request): Promise<Response> {
             // Cleanup empty media item
             try {
                 await client.delete(`/media/${media.id}`);
-            } catch (e){}
+            } catch (e) { }
 
             return new Response('conflict', {
                 status: HTTPCode.BadRequest,
             })
         }
 
-        return new Response('', {status: HTTPCode.Created});
+        return new Response('', { status: HTTPCode.Created });
     }
 
     if (request.method === 'MOVE') {
         const targetUrl = new URL(request.headers.get('Destination') as string);
 
-        let {root, itenName} = await resolvePath(url.pathname, client);
+        let { root, itenName } = await resolvePath(url.pathname, client);
 
         if (root === null) {
-            return new Response('', {status: HTTPCode.NotFound});
+            return new Response('', { status: HTTPCode.NotFound });
         }
 
         // Source is a folder
         if (root.findFolder(itenName)) {
             const folder = root.findFolder(itenName) as Folder;
-            let {root: targetRoot, itenName: targetName} = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
+            let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
 
             await client.put(`/media-folder/${folder.id}`, {
                 parentId: targetRoot?.id,
                 name: targetName
-            }); 
+            });
         } else {
             const media = await getMedia(client, root.id, itenName);
 
             if (media === null) {
-                return new Response('', {status: HTTPCode.NotFound});
+                return new Response('', { status: HTTPCode.NotFound });
             }
 
-            let {root: targetRoot, itenName: targetName} = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
+            let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
 
             // Update folder if moved
             if (targetRoot!!.id !== root.id) {
                 await client.put(`/media/${media.id}`, {
                     mediaFolderId: targetRoot!!.id
-                }); 
+                });
             }
 
             // Update filename when changed
             if (itenName !== targetName) {
-                const {fileExtension: sourceExtension} = extractFileName(targetName);
-                const {fileName: newName, fileExtension: targetExtension} = extractFileName(targetName);
+                const { fileExtension: sourceExtension } = extractFileName(targetName);
+                const { fileName: newName, fileExtension: targetExtension } = extractFileName(targetName);
 
                 if (targetExtension !== sourceExtension) {
                     return new Response('conflict', {
@@ -460,7 +518,7 @@ export async function handleRequest(request: Request): Promise<Response> {
             }
         }
 
-        return new Response('', {status: HTTPCode.Created});
+        return new Response('', { status: HTTPCode.Created });
     }
 
     return response;
@@ -493,7 +551,7 @@ function buildFolder(folder: Folder): XMLBuilder {
     prop.elem('D:getlastmodified', date2RFC1123(folder.createdAt))
     prop.elem('D:displayname', folder.name)
     const resourceType = prop.elem('D:resourcetype')
-    resourceType.elem('D:collection', undefined, {'xmlns:D': 'DAV:'})
+    resourceType.elem('D:collection', undefined, { 'xmlns:D': 'DAV:' })
 
     return builder
 }

@@ -8,7 +8,8 @@
         <description lang="de-DE">Media Manager via WebDav zugreifen</description>
         <author>Shyim</author>
         <copyright>Shyim</copyright>
-        <version>0.0.9</version>
+        <version>0.0.11</version>
+        <icon>icon.png</icon>
         <license>MIT</license>
     </meta>
     <setup>
@@ -39,5 +40,7 @@
     </admin>
     <webhooks>
         <webhook name="appLifecycleDeleted" url="https://froshwebdav.shyim.workers.dev/hook/deleted" event="app.deleted"/>
+        <webhook name="appLifecycleActivated" url="https://froshwebdav.shyim.workers.dev/hook/activated" event="app.activated"/>
+        <webhook name="appLifecycleDeactivated" url="https://froshwebdav.shyim.workers.dev/hook/deactivated" event="app.deactivated"/>
     </webhooks>
 </manifest>

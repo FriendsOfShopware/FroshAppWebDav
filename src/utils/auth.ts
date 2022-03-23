@@ -20,5 +20,20 @@ export async function getShopByAuth(request: Request, storage: ShopRepository): 
         return null;
     }
 
-    return storage.getShopById(values[0])
+    const shop = await storage.getShopById(values[0])
+
+    if (shop === null) {
+        return null;
+    }
+
+    // App is currently deactivated
+    if (shop.customFields.active === undefined || shop.customFields.active === false) {
+        return null;
+    }
+
+    if (shop.customFields.password === values[1]) {
+        return shop;
+    }
+
+    return null;
 }

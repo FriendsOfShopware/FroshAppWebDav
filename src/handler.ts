@@ -46,6 +46,34 @@ export async function handleRequest(request: Request): Promise<Response> {
         return await convertResponse(await app.registration.authorize(req));
     }
 
+    if (url.pathname.startsWith('/module/webdavConfig')) {
+        const req = await convertRequest(request);
+        const ctx = await app.contextResolver.fromModule(req);
+
+        return new Response(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <div><label>Server:</label> https://webdav.fos.gg</div>
+    <div><label>User:</label> ${ctx.shop.id}</div>
+    <div><label>Password:</label> ${ctx.shop.shopSecret}</div>
+    <button>Reset my credentials</buttom>
+
+    <script>
+    window.parent.postMessage('sw-app-loaded', '*');
+    </script>
+</body>
+`, {
+    headers: {
+        "content-type": 'text/html',
+    }
+});
+    }
+
     // We don't store OS specific files. Stop them to reach our backend
     if (url.pathname.endsWith('/desktop.ini') || url.pathname.endsWith('/.DS_Store') || url.pathname.endsWith('/Thumbs.db')) {
         return new Response('', {

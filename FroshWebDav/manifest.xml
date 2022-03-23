@@ -2,13 +2,13 @@
 <manifest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/trunk/src/Core/Framework/App/Manifest/Schema/manifest-1.0.xsd">
     <meta>
         <name>FroshWebDav</name>
-        <label>StockX Integration</label>
-        <label lang="de-DE">StockX Integration</label>
-        <description>Shows bids of items</description>
-        <description lang="de-DE">Shows bids of items</description>
+        <label>Access your shop media using WebDav</label>
+        <label lang="de-DE">Media Manager via WebDav zugreifen</label>
+        <description>Access your shop media using WebDav</description>
+        <description lang="de-DE">Media Manager via WebDav zugreifen</description>
         <author>Shyim</author>
         <copyright>Shyim</copyright>
-        <version>0.0.5</version>
+        <version>0.0.7</version>
         <license>MIT</license>
     </meta>
     <setup>
@@ -27,4 +27,14 @@
         <delete>media_folder</delete>
         <delete>media_thumbnail</delete>
     </permissions>
+    <admin>
+        <module name="webdavConfig"
+                source="https://froshwebdav.shyim.workers.dev/module/webdavConfig"
+                parent="sw-extension"
+                position="50"
+        >
+            <label>Webdav Configuration</label>
+            <label lang="de-DE">Webdav Configuration</label>
+        </module>
+    </admin>
 </manifest>

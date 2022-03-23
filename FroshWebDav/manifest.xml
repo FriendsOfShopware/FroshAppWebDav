@@ -8,7 +8,7 @@
         <description lang="de-DE">Media Manager via WebDav zugreifen</description>
         <author>Shyim</author>
         <copyright>Shyim</copyright>
-        <version>0.0.7</version>
+        <version>0.0.8</version>
         <license>MIT</license>
     </meta>
     <setup>

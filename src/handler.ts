@@ -115,8 +115,8 @@ export async function handleRequest(request: Request): Promise<Response> {
         )
     }
 
-    //const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
-    const shop = await getShopByAuth(request, app.repository);
+    const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
+    //const shop = await getShopByAuth(request, app.repository);
 
     if (shop === null) {
         return new Response("cannot find shop by credentials", {
@@ -223,9 +223,13 @@ export async function handleRequest(request: Request): Promise<Response> {
             media = getCacheKey(shop.id, itenName);
 
             removeCacheKey(shop.id, itenName);
-        } else {
+        } else if (itenName.length) {
+            if (extractFileName(itenName).fileName === '') {
+                return new Response('', {status: HTTPCode.NotFound});
+            }
+
             media = await getMedia(client, root.id, itenName);
-        }
+        }     
 
         if (media === null) {
             return new Response('', {status: HTTPCode.NotFound});
@@ -406,6 +410,37 @@ export async function handleRequest(request: Request): Promise<Response> {
                 parentId: targetRoot?.id,
                 name: targetName
             }); 
+        } else {
+            const media = await getMedia(client, root.id, itenName);
+
+            if (media === null) {
+                return new Response('', {status: HTTPCode.NotFound});
+            }
+
+            let {root: targetRoot, itenName: targetName} = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
+
+            // Update folder if moved
+            if (targetRoot!!.id !== root.id) {
+                await client.put(`/media/${media.id}`, {
+                    mediaFolderId: targetRoot!!.id
+                }); 
+            }
+
+            // Update filename when changed
+            if (itenName !== targetName) {
+                const {fileExtension: sourceExtension} = extractFileName(targetName);
+                const {fileName: newName, fileExtension: targetExtension} = extractFileName(targetName);
+
+                if (targetExtension !== sourceExtension) {
+                    return new Response('conflict', {
+                        status: HTTPCode.BadRequest,
+                    })
+                }
+
+                await client.post(`/_action/media/${media.id}/rename`, {
+                    fileName: newName
+                });
+            }
         }
 
         return new Response('', {status: HTTPCode.Created});

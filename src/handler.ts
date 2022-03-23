@@ -5,9 +5,9 @@ import { convertRequest, convertResponse, CloudflareShopRepository } from "shopw
 import { HttpClient } from "shopware-app-server-sdk/component/http-client";
 import XMLBuilder from "./utils/xml";
 import { getShopByAuth } from "./utils/auth";
-import { Folder, getFolderTree } from "./utils/tree";
+import { Folder } from "./utils/tree";
 import { HTTPCode } from "./utils/enum";
-import { extractFileName, resolveRoot as resolvePath } from "./utils/path";
+import { extractFileName, resolveRoot as resolvePath, resolveRootOnFolder } from "./utils/path";
 import { getMedia, MediaEntity } from "./utils/api";
 import { getCacheKey, hasCacheKey, removeCacheKey, setCacheKey } from "./utils/cache";
 
@@ -115,6 +115,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         )
     }
 
+    //const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
     const shop = await getShopByAuth(request, app.repository);
 
     if (shop === null) {
@@ -282,9 +283,25 @@ export async function handleRequest(request: Request): Promise<Response> {
         }
 
         if (root.findFolder(itenName)) {
-            await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`);
+            const folder = root.findFolder(itenName) as Folder;
 
-            // Delete all files in that folder and recursive
+            const mediaElements = await client.post('/search-ids/media', {
+                filter: [
+                    {
+                        'type': 'equalsAny',
+                        'field': 'mediaFolderId',
+                        'value': [folder.id, ...folder.getChildrenIds()]
+                    }
+                ]
+            });
+
+            if (mediaElements.body.total > 0) {
+                return new Response('folder is not empty', {
+                    status: HTTPCode.Conflict,
+                })
+            }
+
+            await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`);
         } else {
             const media = await getMedia(client, root.id, itenName);
 
@@ -383,13 +400,12 @@ export async function handleRequest(request: Request): Promise<Response> {
         // Source is a folder
         if (root.findFolder(itenName)) {
             const folder = root.findFolder(itenName) as Folder;
-            let {root: targetRoot, itenName: targetName} = await resolvePath(targetUrl.pathname, client);
+            let {root: targetRoot, itenName: targetName} = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
 
             await client.put(`/media-folder/${folder.id}`, {
                 parentId: targetRoot?.id,
                 name: targetName
-            });
-            
+            }); 
         }
 
         return new Response('', {status: HTTPCode.Created});

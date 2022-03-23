@@ -62,6 +62,27 @@ export class Folder {
 
         return `${path}/${encodeURIComponent(this.name)}/`;
     }
+
+    getRoot(): Folder {
+        let cur: Folder = this;
+
+        while (cur.parent != null) {
+            cur = cur.parent;
+        }
+
+        return cur;
+    }
+
+    getChildrenIds(): string[] {
+        const list: string[] = [];
+
+        for (const child of this.children) {
+            list.push(child.id as string);
+            list.push(...child.getChildrenIds());
+        }
+
+        return list;
+    }
 }
 
 export async function getFolderTree(client: HttpClient): Promise<Folder>
@@ -99,8 +120,3 @@ export async function getFolderTree(client: HttpClient): Promise<Folder>
     return root;
 }
 
-let a = new Folder('a', 'a', null, 'a');
-let b = new Folder('b', 'b', null, 'b');
-let c = new Folder('c', 'c', null, 'c');
-c.parent = b;
-b.parent = a;

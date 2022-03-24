@@ -481,7 +481,7 @@ export async function handleRequest(request: Request): Promise<Response> {
             const folder = root.findFolder(itenName) as Folder;
             let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
 
-            await client.put(`/media-folder/${folder.id}`, {
+            await client.patch(`/media-folder/${folder.id}`, {
                 parentId: targetRoot?.id,
                 name: targetName
             });
@@ -496,7 +496,7 @@ export async function handleRequest(request: Request): Promise<Response> {
 
             // Update folder if moved
             if (targetRoot!!.id !== root.id) {
-                await client.put(`/media/${media.id}`, {
+                await client.patch(`/media/${media.id}`, {
                     mediaFolderId: targetRoot!!.id
                 });
             }

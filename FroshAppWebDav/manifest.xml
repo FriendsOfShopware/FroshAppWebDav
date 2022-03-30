@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <manifest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/trunk/src/Core/Framework/App/Manifest/Schema/manifest-1.0.xsd">
     <meta>
-        <name>FroshWebDav</name>
+        <name>FroshAppWebDav</name>
         <label>WebDav</label>
         <label lang="de-DE">WebDav</label>
         <description>Access your shop media using WebDav</description>
@@ -13,7 +13,7 @@
         <license>MIT</license>
     </meta>
     <setup>
-        <registrationUrl>https://froshwebdav.shyim.workers.dev/authorize</registrationUrl>
+        <registrationUrl>https://webdav.app.fos.gg/authorize</registrationUrl>
         <secret>aClGgcSrikPWLI674NI3R84clyC7gyOS</secret>
     </setup>
     <permissions>
@@ -30,7 +30,7 @@
     </permissions>
     <admin>
         <module name="webdavConfig"
-                source="https://froshwebdav.shyim.workers.dev/module/webdavConfig"
+                source="https://webdav.app.fos.gg/module/webdavConfig"
                 parent="sw-extension"
                 position="50"
         >
@@ -39,8 +39,8 @@
         </module>
     </admin>
     <webhooks>
-        <webhook name="appLifecycleDeleted" url="https://froshwebdav.shyim.workers.dev/hook/deleted" event="app.deleted"/>
-        <webhook name="appLifecycleActivated" url="https://froshwebdav.shyim.workers.dev/hook/activated" event="app.activated"/>
-        <webhook name="appLifecycleDeactivated" url="https://froshwebdav.shyim.workers.dev/hook/deactivated" event="app.deactivated"/>
+        <webhook name="appLifecycleDeleted" url="https://webdav.app.fos.gg/hook/deleted" event="app.deleted"/>
+        <webhook name="appLifecycleActivated" url="https://webdav.app.fos.gg/hook/activated" event="app.activated"/>
+        <webhook name="appLifecycleDeactivated" url="https://webdav.app.fos.gg/hook/deactivated" event="app.deactivated"/>
     </webhooks>
 </manifest>

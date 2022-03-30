@@ -14,9 +14,9 @@ import { Shop } from "shopware-app-server-sdk/shop";
 import { generateRandomString } from "./utils/random";
 
 const cfg: Config = {
-    appName: 'FroshWebDav',
-    appSecret: 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
-    authorizeCallbackUrl: 'https://froshwebdav.shyim.workers.dev/authorize/callback'
+    appName: 'FroshAppWebDav',
+    appSecret: APP_SECRET || 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
+    authorizeCallbackUrl: 'https://webdav.app.fos.gg/authorize/callback'
 };
 
 const clientCache: any = [];

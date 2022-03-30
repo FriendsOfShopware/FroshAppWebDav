@@ -17,3 +17,6 @@ format = "service-worker"
 binding = "shopStorage"
 id = "f2112b386a2b40119f21ce1b4c46e5f8"
 preview_id = "f2112b386a2b40119f21ce1b4c46e5f8"
+
+[secrets]
+APP_SECRET

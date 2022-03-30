@@ -16,7 +16,7 @@ import { generateRandomString } from "./utils/random";
 const cfg: Config = {
     appName: 'FroshAppWebDav',
 // @ts-ignore
-    appSecret: APP_SECRET || 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
+    appSecret: globalThis.APP_SECRET || 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
     authorizeCallbackUrl: 'https://webdav.app.fos.gg/authorize/callback'
 };
 

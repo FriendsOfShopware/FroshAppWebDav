@@ -1,6 +1,6 @@
 name = "froshwebdav"
 type = "javascript"
-workers_dev = true
+workers_dev = false
 compatibility_date = "2022-03-04"
 account_id = "963ff7fb9c523564b5f3a398ab39d488"
 

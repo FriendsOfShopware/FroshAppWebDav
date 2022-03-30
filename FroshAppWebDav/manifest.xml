@@ -13,7 +13,7 @@
         <license>MIT</license>
     </meta>
     <setup>
-        <registrationUrl>https://webdav.app.fos.gg/authorize</registrationUrl>
+        <registrationUrl>https://webdav.fos.gg/authorize</registrationUrl>
         <secret>aClGgcSrikPWLI674NI3R84clyC7gyOS</secret>
     </setup>
     <permissions>
@@ -30,7 +30,7 @@
     </permissions>
     <admin>
         <module name="webdavConfig"
-                source="https://webdav.app.fos.gg/module/webdavConfig"
+                source="https://webdav.fos.gg/module/webdavConfig"
                 parent="sw-extension"
                 position="50"
         >
@@ -39,8 +39,8 @@
         </module>
     </admin>
     <webhooks>
-        <webhook name="appLifecycleDeleted" url="https://webdav.app.fos.gg/hook/deleted" event="app.deleted"/>
-        <webhook name="appLifecycleActivated" url="https://webdav.app.fos.gg/hook/activated" event="app.activated"/>
-        <webhook name="appLifecycleDeactivated" url="https://webdav.app.fos.gg/hook/deactivated" event="app.deactivated"/>
+        <webhook name="appLifecycleDeleted" url="https://webdav.fos.gg/hook/deleted" event="app.deleted"/>
+        <webhook name="appLifecycleActivated" url="https://webdav.fos.gg/hook/activated" event="app.activated"/>
+        <webhook name="appLifecycleDeactivated" url="https://webdav.fos.gg/hook/deactivated" event="app.deactivated"/>
     </webhooks>
 </manifest>

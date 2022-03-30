@@ -17,7 +17,7 @@ const cfg: Config = {
     appName: 'FroshAppWebDav',
 // @ts-ignore
     appSecret: globalThis.APP_SECRET || 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
-    authorizeCallbackUrl: 'https://webdav.app.fos.gg/authorize/callback'
+    authorizeCallbackUrl: 'https://webdav.fos.gg/authorize/callback'
 };
 
 const clientCache: any = [];
@@ -107,7 +107,7 @@ export async function handleRequest(request: Request): Promise<Response> {
             <div class="card-body">
                 <h5 class="card-title">My Credentials</h5>
                 <p class="card-text">
-                    <div><strong>Server:</strong> https://webdav.app.fos.gg</div>
+                    <div><strong>Server:</strong> https://webdav.fos.gg</div>
                     <div><strong>User:</strong> ${ctx.shop.id}</div>
                     <div class="mb-1"><strong>Password:</strong> ${ctx.shop.customFields.password}</div>
 

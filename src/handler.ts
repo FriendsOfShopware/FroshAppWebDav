@@ -130,6 +130,30 @@ export async function handleRequest(request: Request): Promise<Response> {
                 </p>
             </div>
         </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Setup on Windows</h5>
+                <div class="card-text">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">Open Windows Explorer</li>
+                        <li class="list-group-item">Right Click and Press "Add a new Network Location"</li>
+                        <li class="list-group-item">Press Next and continue with "Choose a custom network location"</li>
+                        <li class="list-group-item">Enter as Internet address "https://webdav.fos.gg"</li>
+                        <li class="list-group-item">Enter your credentials from above and you are ready to go</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Setup on macOS</h5>
+                <div class="card-text">
+                    <a href="https://support.apple.com/guide/mac-help/connect-disconnect-a-webdav-server-mac-mchlp1546/mac" target="_blank">See guide from Apple</a>
+                </div>
+            </div>
+        </div>
     </div>
     
 

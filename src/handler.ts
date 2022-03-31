@@ -57,21 +57,21 @@ export async function handleRequest(request: Request): Promise<Response> {
 
     if (url.pathname.startsWith('/hook/deleted')) {
         const req = await convertRequest(request);
-        const source = await app.contextResolver.fromSource(req);
+        let source = null;
 
-        await app.repository.deleteShop(source.shop);
+        // When the message queue is broken, we get requests about already uninstalled shops. Ignore it
+        try {
+            source = await app.contextResolver.fromSource(req);
+        } catch (e) {}
+
+        if (source) {
+            await app.repository.deleteShop(source.shop);
+        }
 
         return new Response(null, { status: HTTPCode.NoContent });
     }
 
     if (url.pathname.startsWith('/hook/activated') || url.pathname.startsWith('/hook/deactivated')) {
-        const req = await convertRequest(request);
-        const source = await app.contextResolver.fromSource(req);
-
-        source.shop.customFields.active = url.pathname.startsWith('/hook/activated');
-
-        await app.repository.updateShop(source.shop);
-
         return new Response(null, { status: HTTPCode.NoContent });
     }
 

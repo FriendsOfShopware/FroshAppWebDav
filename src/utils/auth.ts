@@ -26,11 +26,6 @@ export async function getShopByAuth(request: Request, storage: ShopRepository): 
         return null;
     }
 
-    // App is currently deactivated
-    if (shop.customFields.active === undefined || shop.customFields.active === false) {
-        return null;
-    }
-
     if (shop.customFields.password === values[1]) {
         return shop;
     }

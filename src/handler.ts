@@ -126,6 +126,7 @@ export async function handleRequest(request: Request): Promise<Response> {
                         <li class="list-group-item">The file size is limited to your Shopware hosting settings</li>
                         <li class="list-group-item">A file name can be only used once between all folders</li>
                         <li class="list-group-item">Only following file types are supported: jpg, jpeg, png, webp, gif, svg, bmp, tiff, tif, eps, webm, mkv, flv, ogv, ogg, mov, mp4, avi, wmv, pdf, aac, mp3, wav, flac, oga, wma, txt, doc, ico</li>
+                        <li class="list-group-item">Images are in use can't be deleted as like in the Administration</li>
                     </ul>
                 </p>
             </div>
@@ -150,7 +151,7 @@ export async function handleRequest(request: Request): Promise<Response> {
             <div class="card-body">
                 <h5 class="card-title">Setup on macOS</h5>
                 <div class="card-text">
-                    <a href="https://support.apple.com/guide/mac-help/connect-disconnect-a-webdav-server-mac-mchlp1546/mac" target="_blank">See guide from Apple</a>
+                    <a href="https://support.apple.com/guide/mac-help/connect-disconnect-a-webdav-server-mac-mchlp1546/mac" target="_blank" rel="noopener">See guide from Apple</a>
                 </div>
             </div>
         </div>

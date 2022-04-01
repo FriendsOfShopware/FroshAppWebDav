@@ -14,7 +14,6 @@
     </meta>
     <setup>
         <registrationUrl>https://webdav.fos.gg/authorize</registrationUrl>
-        <secret>aClGgcSrikPWLI674NI3R84clyC7gyOS</secret>
     </setup>
     <permissions>
         <read>media</read>
@@ -35,7 +34,7 @@
                 position="50"
         >
             <label>Config</label>
-            <label lang="de-DE">Config</label>
+            <label lang="de-DE">Konfiguration</label>
         </module>
     </admin>
     <webhooks>

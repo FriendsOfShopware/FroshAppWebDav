@@ -87,7 +87,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
 </head>
-<body>
+<body style="overflow: hidden">
     <div class="container">
         <div class="card mb-4 mt-4">
             <div class="card-body">

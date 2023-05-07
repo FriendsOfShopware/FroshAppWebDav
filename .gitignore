@@ -2,3 +2,4 @@
 /FroshWebDav/.shopware-project.yml
 /dist/
 /node_modules
+/worker.js*

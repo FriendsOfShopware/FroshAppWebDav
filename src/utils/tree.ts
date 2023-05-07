@@ -1,107 +1,106 @@
-import { HttpClient } from "shopware-app-server-sdk/component/http-client";
+import { HttpClient } from '@friendsofshopware/app-server-sdk'
 
 export class Folder {
-    public id: string | null;
-    public name: string;
-    public parentId: string | null;
-    public createdAt: string;
-    public children: Folder[];
-    public parent: Folder|null;
+    public id: string | null
+    public name: string
+    public parentId: string | null
+    public createdAt: string
+    public children: Folder[]
+    public parent: Folder | null
 
-    constructor(id: string|null, name: string, parentId: string | null, createdAt: string, children: Folder[] = []) {
-        this.id = id;
-        this.name = name;
-        this.parentId = parentId;
-        this.createdAt = createdAt;
-        this.children = children;
-        this.parent = null;
+    constructor(id: string | null, name: string, parentId: string | null, createdAt: string, children: Folder[] = []) {
+        this.id = id
+        this.name = name
+        this.parentId = parentId
+        this.createdAt = createdAt
+        this.children = children
+        this.parent = null
     }
 
-    findFolderByPath(parts: string[]): Folder|null {
-        let cur : Folder|null = this;
+    findFolderByPath(parts: string[]): Folder | null {
+        let cur: Folder | null = this
 
-        while(parts.length) {
-            const part = parts.shift();
+        while (parts.length) {
+            const part = parts.shift()
 
             if (part === undefined) {
-                return null;
+                return null
             }
 
-            cur = cur.findFolder(part);
+            cur = cur.findFolder(part)
 
             if (cur === null) {
-                return null;
+                return null
             }
         }
 
-        return cur;
+        return cur
     }
 
-    findFolder(name: string): Folder|null {
+    findFolder(name: string): Folder | null {
         for (const child of this.children) {
             if (child.name === name) {
-                return child;
+                return child
             }
         }
 
-        return null;
+        return null
     }
 
     getPath(): string {
         if (this.id === null) {
-            return '/';
+            return '/'
         }
 
-        let cur = this.parent;
-        let path = '';
+        let cur = this.parent
+        let path = ''
 
         while (cur != null) {
             // If we reached the root, skip
             if (cur.id === null) {
-                cur = cur.parent;
-                continue;
+                cur = cur.parent
+                continue
             }
 
-            path = `/${encodeURIComponent(cur.name)}${path}`;
-            cur = cur.parent;
+            path = `/${encodeURIComponent(cur.name)}${path}`
+            cur = cur.parent
         }
 
-        return `${path}/${encodeURIComponent(this.name)}/`;
+        return `${path}/${encodeURIComponent(this.name)}/`
     }
 
     getRoot(): Folder {
-        let cur: Folder = this;
+        let cur: Folder = this
 
         while (cur.parent != null) {
-            cur = cur.parent;
+            cur = cur.parent
         }
 
-        return cur;
+        return cur
     }
 
     getChildrenIds(): string[] {
-        const list: string[] = [];
+        const list: string[] = []
 
         for (const child of this.children) {
-            list.push(child.id as string);
-            list.push(...child.getChildrenIds());
+            list.push(child.id as string)
+            list.push(...child.getChildrenIds())
         }
 
-        return list;
+        return list
     }
 }
 
-export async function getFolderTree(client: HttpClient): Promise<Folder>
-{
+export async function getFolderTree(client: HttpClient): Promise<Folder> {
     const mediaFolderResult = await client.post('/search/media-folder', {
         includes: {
             media_folder: ['id', 'name', 'parentId', 'createdAt'],
-        }
-    });
+        },
+    })
 
-    const root = new Folder(null, '', null, '', []);
+    const root = new Folder(null, '', null, '', [])
 
-    let children: Folder[] = [];
+    let children: Folder[] = []
 
     // Convert all to Folder type
     for (const serverFolder of mediaFolderResult.body.data) {
@@ -112,21 +111,20 @@ export async function getFolderTree(client: HttpClient): Promise<Folder>
     for (const child of children) {
         for (const otherChild of children) {
             if (otherChild.parentId === child.id) {
-                child.children.push(otherChild);
-                otherChild.parent = child;
+                child.children.push(otherChild)
+                otherChild.parent = child
             }
         }
 
         if (child.parentId === null) {
-            child.parent = root;
+            child.parent = root
         }
     }
 
     // Strip all non parentId to root
     root.children = children.filter((child) => {
-        return child.parentId === null;
-    });
+        return child.parentId === null
+    })
 
-    return root;
+    return root
 }
-

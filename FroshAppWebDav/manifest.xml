@@ -8,7 +8,7 @@
         <description lang="de-DE">Media Manager via WebDav zugreifen</description>
         <author>Shyim</author>
         <copyright>Shyim</copyright>
-        <version>0.0.11</version>
+        <version>0.0.12</version>
         <icon>icon.png</icon>
         <license>MIT</license>
     </meta>
@@ -33,8 +33,8 @@
                 parent="sw-extension"
                 position="50"
         >
-            <label>Config</label>
-            <label lang="de-DE">Konfiguration</label>
+            <label>Webdav</label>
+            <label lang="de-DE">Webdav</label>
         </module>
     </admin>
     <webhooks>

@@ -1,39 +1,39 @@
-import { HttpClient } from "shopware-app-server-sdk/component/http-client";
-import { Folder, getFolderTree } from "./tree";
+import { HttpClient } from '@friendsofshopware/app-server-sdk'
+import { Folder, getFolderTree } from './tree'
 
 export async function resolveRoot(path: string, client: HttpClient) {
-    let root: Folder | null = await getFolderTree(client);
+    let root: Folder | null = await getFolderTree(client)
 
-    return resolveRootOnFolder(path, root);
+    return resolveRootOnFolder(path, root)
 }
 
 export function resolveRootOnFolder(path: string, folder: Folder) {
-    let root: Folder | null = folder;
+    let root: Folder | null = folder
 
-    path = path.substring(1);
+    path = path.substring(1)
 
     if (path.endsWith('/')) {
-        path = path.substring(0, path.length - 1);
+        path = path.substring(0, path.length - 1)
     }
 
-    const parts = path.split('/').map(part => decodeURIComponent(part));
+    const parts = path.split('/').map((part) => decodeURIComponent(part))
 
-    const itenName = (parts.pop() as string);
+    const itenName = parts.pop() as string
 
     if (parts.length) {
-        root = root.findFolderByPath(parts);
+        root = root.findFolderByPath(parts)
     }
 
     return {
         root,
-        itenName
+        itenName,
     }
 }
 
 export function extractFileName(itenName: string) {
-    const fileSplits = itenName.split('.');
-    const fileExtension = fileSplits.pop();
-    const fileName = fileSplits.join('.');
+    const fileSplits = itenName.split('.')
+    const fileExtension = fileSplits.pop()
+    const fileName = fileSplits.join('.')
 
-    return { fileName, fileExtension: fileExtension as string };
+    return { fileName, fileExtension: fileExtension as string }
 }

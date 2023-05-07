@@ -1,34 +1,34 @@
-import { ShopRepository } from "shopware-app-server-sdk/repository";
-import { Shop } from "shopware-app-server-sdk/shop";
+import { ShopInterface, ShopRepositoryInterface } from '@friendsofshopware/app-server-sdk'
+import { Shop } from './repository'
 
-export async function getShopByAuth(request: Request, storage: ShopRepository): Promise<Shop|null> {
-    let authHeader = request.headers.get('Authorization');
+export async function getShopByAuth(request: Request, storage: ShopRepositoryInterface): Promise<ShopInterface | null> {
+    let authHeader = request.headers.get('Authorization')
 
     if (typeof authHeader !== 'string') {
         return null
     }
 
     if (!authHeader.startsWith('Basic ')) {
-        return null;
+        return null
     }
 
-    authHeader = atob(authHeader.substring(6));
+    authHeader = atob(authHeader.substring(6))
 
-    const values = authHeader.split(':');
+    const values = authHeader.split(':')
 
     if (values.length !== 2) {
-        return null;
+        return null
     }
 
-    const shop = await storage.getShopById(values[0])
+    const shop = (await storage.getShopById(values[0])) as Shop
 
     if (shop === null) {
-        return null;
+        return null
     }
 
     if (shop.customFields.password === values[1]) {
-        return shop;
+        return shop
     }
 
-    return null;
+    return null
 }

@@ -1,85 +1,72 @@
-import { App } from "shopware-app-server-sdk";
-import { Config } from "shopware-app-server-sdk/config";
-import { WebCryptoHmacSigner } from "shopware-app-server-sdk/component/signer";
-import { convertRequest, convertResponse, CloudflareShopRepository } from "shopware-app-server-sdk/runtime/cf-worker";
-import { HttpClient } from "shopware-app-server-sdk/component/http-client";
-import XMLBuilder from "./utils/xml";
-import { getShopByAuth } from "./utils/auth";
-import { Folder } from "./utils/tree";
-import { HTTPCode } from "./utils/enum";
-import { extractFileName, resolveRoot as resolvePath, resolveRootOnFolder } from "./utils/path";
-import { getMedia, MediaEntity } from "./utils/api";
-import { getCacheKey, hasCacheKey, removeCacheKey, setCacheKey } from "./utils/cache";
-import { Shop } from "shopware-app-server-sdk/shop";
-import { generateRandomString } from "./utils/random";
+import { AppServer, HttpClient, WebCryptoHmacSigner } from '@friendsofshopware/app-server-sdk'
+import { Shop, ShopRepository } from './utils/repository'
+import XMLBuilder from './utils/xml'
+import { getShopByAuth } from './utils/auth'
+import { Folder } from './utils/tree'
+import { HTTPCode } from './utils/enum'
+import { extractFileName, resolveRoot as resolvePath, resolveRootOnFolder } from './utils/path'
+import { getMedia, MediaEntity } from './utils/api'
+import { getCacheKey, hasCacheKey, removeCacheKey, setCacheKey } from './utils/cache'
 
-const cfg: Config = {
-    appName: 'FroshAppWebDav',
-// @ts-ignore
-    appSecret: globalThis.APP_SECRET || 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
-    authorizeCallbackUrl: 'https://webdav.fos.gg/authorize/callback'
-};
+const clientCache: any = []
 
-const clientCache: any = [];
-
-export async function handleRequest(request: Request): Promise<Response> {
+export async function handleRequest(request: Request, env: Env): Promise<Response> {
     // deliver options fast as possible
     if (request.method === 'OPTIONS') {
         return new Response(null, {
             headers: {
-                'Allow': 'OPTIONS, DELETE, COPY, MOVE, PROPFIND',
+                Allow: 'OPTIONS, DELETE, COPY, MOVE, PROPFIND',
                 'Ms-Author-Via': 'DAV',
-                'DAV': '1, 2',
-            }
-        });
+                DAV: '1, 2',
+            },
+        })
     }
-    
-    const url = new URL(request.url);
 
-    // @ts-ignore
-    const app = new App(cfg, new CloudflareShopRepository(globalThis.shopStorage), new WebCryptoHmacSigner());
+    const url = new URL(request.url)
+
+    const app = new AppServer(
+        {
+            appName: 'FroshAppWebDav',
+            appSecret: env.APP_SECRET || 'aClGgcSrikPWLI674NI3R84clyC7gyOS',
+            authorizeCallbackUrl: 'https://webdav.fos.gg/authorize/callback',
+        },
+        new ShopRepository(env.shopStorage),
+        new WebCryptoHmacSigner()
+    )
 
     if (url.pathname.startsWith('/authorize/callback')) {
-        const req = await convertRequest(request);
-
-        const successHandler = async (shop: Shop) => {
-            shop.customFields.password = generateRandomString(16);
-            shop.customFields.active = false;
-        };
-
-        return await convertResponse(await app.registration.authorizeCallback(req, successHandler));
+        return await app.registration.authorizeCallback(request)
     }
 
     if (url.pathname.startsWith('/authorize')) {
-        const req = await convertRequest(request);
-        return await convertResponse(await app.registration.authorize(req));
+        return await app.registration.authorize(request)
     }
 
     if (url.pathname.startsWith('/hook/deleted')) {
-        const req = await convertRequest(request);
-        let source = null;
+        let source = null
 
         // When the message queue is broken, we get requests about already uninstalled shops. Ignore it
         try {
-            source = await app.contextResolver.fromSource(req);
+            source = await app.contextResolver.fromSource(request)
         } catch (e) {}
 
         if (source) {
-            await app.repository.deleteShop(source.shop);
+            await app.repository.deleteShop(source.shop.getShopId())
         }
 
-        return new Response(null, { status: HTTPCode.NoContent });
+        return new Response(null, { status: HTTPCode.NoContent })
     }
 
     if (url.pathname.startsWith('/hook/activated') || url.pathname.startsWith('/hook/deactivated')) {
-        return new Response(null, { status: HTTPCode.NoContent });
+        return new Response(null, { status: HTTPCode.NoContent })
     }
 
     if (url.pathname.startsWith('/module/webdavConfig')) {
-        const req = await convertRequest(request);
-        const ctx = await app.contextResolver.fromModule(req);
+        const ctx = await app.contextResolver.fromModule(request)
+        const shop = ctx.shop as Shop
 
-        return new Response(`
+        return new Response(
+            `
 <!DOCTYPE html>
 <html>
 <head>
@@ -108,8 +95,8 @@ export async function handleRequest(request: Request): Promise<Response> {
                 <h5 class="card-title">My Credentials</h5>
                 <p class="card-text">
                     <div><strong>Server:</strong> https://webdav.fos.gg</div>
-                    <div><strong>User:</strong> ${ctx.shop.id}</div>
-                    <div class="mb-1"><strong>Password:</strong> ${ctx.shop.customFields.password}</div>
+                    <div><strong>User:</strong> ${shop.getShopId()}</div>
+                    <div class="mb-1"><strong>Password:</strong> ${shop.customFields.password}</div>
 
                     <div class="alert alert-info" role="alert">
                         The password is auto generated. If you want to reset it, just reinstall the app.
@@ -162,23 +149,26 @@ export async function handleRequest(request: Request): Promise<Response> {
     window.parent.postMessage('sw-app-loaded', '*');
     </script>
 </body>
-`, {
-            headers: {
-                "content-type": 'text/html',
+`,
+            {
+                headers: {
+                    'content-type': 'text/html',
+                },
             }
-        });
+        )
     }
 
     // We don't store OS specific files. Stop them to reach our backend
     if (url.pathname.endsWith('/desktop.ini') || url.pathname.endsWith('/.DS_Store') || url.pathname.endsWith('/Thumbs.db')) {
         return new Response('', {
             status: HTTPCode.NotFound,
-        });
+        })
     }
 
     // We don't support it, but some stupid clients like Windows Explorer still does it
     if (request.method === 'LOCK') {
-        return new Response(`<?xml version="1.0" encoding="utf-8"?>
+        return new Response(
+            `<?xml version="1.0" encoding="utf-8"?>
         <D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock>
             <D:locktype><D:write/></D:locktype>
             <D:lockscope><D:exclusive/></D:lockscope>
@@ -187,12 +177,14 @@ export async function handleRequest(request: Request): Promise<Response> {
             <D:timeout>Second-3600</D:timeout>
             <D:locktoken><D:href>1647962846</D:href></D:locktoken>
             <D:lockroot><D:href>/00f1628adad3b4d284f5ed009ddccbdd.jpg</D:href></D:lockroot>
-        </D:activelock></D:lockdiscovery></D:prop>`, {
-            status: HTTPCode.OK,
-            headers: {
-                'Lock-Token': '<1647962846>'
+        </D:activelock></D:lockdiscovery></D:prop>`,
+            {
+                status: HTTPCode.OK,
+                headers: {
+                    'Lock-Token': '<1647962846>',
+                },
             }
-        });
+        )
     }
 
     if (request.method === 'UNLOCK') {
@@ -210,46 +202,45 @@ export async function handleRequest(request: Request): Promise<Response> {
         )
     }
 
-    //const shop = await app.repository.getShopById('66nXHnfQ8hgvb31O');
-    const shop = await getShopByAuth(request, app.repository);
+    const shop = await getShopByAuth(request, app.repository)
 
     if (shop === null) {
-        return new Response("cannot find shop by credentials", {
+        return new Response('cannot find shop by credentials', {
             status: HTTPCode.Unauthorized,
             headers: {
-                'WWW-Authenticate': 'Basic realm="WebDav"'
-            }
-        });
+                'WWW-Authenticate': 'Basic realm="WebDav"',
+            },
+        })
     }
 
-    let client: HttpClient;
-    if (typeof clientCache[shop.id] !== 'undefined') {
-        client = clientCache[shop.id] as HttpClient;
+    let client: HttpClient
+    if (typeof clientCache[shop.getShopId()] !== 'undefined') {
+        client = clientCache[shop.getShopId()] as HttpClient
     } else {
-        client = clientCache[shop.id] = new HttpClient(shop);
+        client = clientCache[shop.getShopId()] = new HttpClient(shop)
     }
 
     let response = new Response(null, {
         status: HTTPCode.MethodNotAllowed,
-    });
+    })
 
     if (request.method === 'PROPFIND') {
-        let { root, itenName } = await resolvePath(url.pathname, client);
+        let { root, itenName } = await resolvePath(url.pathname, client)
 
         if (root === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         }
 
-        const depth = parseInt(request.headers.get('depth') || '1');
+        const depth = parseInt(request.headers.get('depth') || '1')
 
         const builder = new XMLBuilder('D:multistatus', {
             'xmlns:D': 'DAV:',
-        });
+        })
 
         // Requested find is a folder
         if (itenName === '' || root.findFolder(itenName)) {
             if (root.findFolder(itenName)) {
-                root = root.findFolder(itenName) as Folder;
+                root = root.findFolder(itenName) as Folder
             }
 
             builder.add(buildFolder(root))
@@ -265,36 +256,36 @@ export async function handleRequest(request: Request): Promise<Response> {
                             type: 'equals',
                             field: 'mediaFolderId',
                             value: root.id,
-                        }
-                    ]
-                });
+                        },
+                    ],
+                })
 
                 for (const result of res.body.data) {
                     if (result.fileName === null) {
-                        continue;
+                        continue
                     }
 
-                    builder.add(buildFile(root, result));
+                    builder.add(buildFile(root, result))
                 }
             }
         } else {
-            let media: MediaEntity | null = null;
+            let media: MediaEntity | null = null
 
             if (extractFileName(itenName).fileName === '') {
-                return new Response('', { status: HTTPCode.NotFound });
+                return new Response('', { status: HTTPCode.NotFound })
             }
 
-            if (hasCacheKey(shop.id, itenName)) {
-                media = getCacheKey(shop.id, itenName);
+            if (hasCacheKey(shop.getShopId(), itenName)) {
+                media = getCacheKey(shop.getShopId(), itenName)
             } else {
-                media = await getMedia(client, root.id, itenName);
+                media = await getMedia(client, root.id, itenName)
             }
 
             if (media == null) {
-                return new Response('', { status: HTTPCode.NotFound });
+                return new Response('', { status: HTTPCode.NotFound })
             }
 
-            builder.add(buildFile(root, media));
+            builder.add(buildFile(root, media))
         }
 
         return new Response(builder.build(), {
@@ -304,95 +295,95 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     if (request.method === 'GET' || request.method === 'HEAD') {
-        const { root, itenName } = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client)
 
         if (root === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         } else if (itenName === '') {
-            return new Response('', { status: HTTPCode.OK });
+            return new Response('', { status: HTTPCode.OK })
         }
 
-        let media: MediaEntity | null = null;
+        let media: MediaEntity | null = null
 
-        if (hasCacheKey(shop.id, itenName)) {
-            media = getCacheKey(shop.id, itenName);
+        if (hasCacheKey(shop.getShopId(), itenName)) {
+            media = getCacheKey(shop.getShopId(), itenName)
 
-            removeCacheKey(shop.id, itenName);
+            removeCacheKey(shop.getShopId(), itenName)
         } else if (itenName.length) {
             if (extractFileName(itenName).fileName === '') {
-                return new Response('', { status: HTTPCode.NotFound });
+                return new Response('', { status: HTTPCode.NotFound })
             }
 
-            media = await getMedia(client, root.id, itenName);
+            media = await getMedia(client, root.id, itenName)
         }
 
         if (media === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         }
 
         if (request.method === 'GET') {
             if (media.url === 'dummy') {
-                return new Response('');
+                return new Response('')
             }
 
             return await fetch(media.url, {
                 headers: {
-                    Range: request.headers.get('Range') || ''
-                }
+                    Range: request.headers.get('Range') || '',
+                },
             })
         } else {
             return new Response('', {
                 status: HTTPCode.OK,
                 headers: {
-                    'content-length': media.fileSize.toString()
-                }
+                    'content-length': media.fileSize.toString(),
+                },
             })
         }
     }
 
     if (request.method === 'MKCOL') {
-        const { root, itenName } = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client)
 
         if (root === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         }
 
         if (root.findFolder(itenName) !== null) {
-            return new Response('', { status: HTTPCode.Conflict });
+            return new Response('', { status: HTTPCode.Conflict })
         }
 
         await client.post('/media-folder', {
             parentId: root.id,
             name: itenName,
             configuration: {
-                private: false
-            }
-        });
+                private: false,
+            },
+        })
 
         return new Response('', {
             status: HTTPCode.Created,
-        });
+        })
     }
 
     if (request.method === 'DELETE') {
-        const { root, itenName } = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client)
 
         if (root === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         }
 
         if (root.findFolder(itenName)) {
-            const folder = root.findFolder(itenName) as Folder;
+            const folder = root.findFolder(itenName) as Folder
 
             const mediaElements = await client.post('/search-ids/media', {
                 filter: [
                     {
-                        'type': 'equalsAny',
-                        'field': 'mediaFolderId',
-                        'value': [folder.id, ...folder.getChildrenIds()]
-                    }
-                ]
-            });
+                        type: 'equalsAny',
+                        field: 'mediaFolderId',
+                        value: [folder.id, ...folder.getChildrenIds()],
+                    },
+                ],
+            })
 
             if (mediaElements.body.total > 0) {
                 return new Response('folder is not empty', {
@@ -400,18 +391,18 @@ export async function handleRequest(request: Request): Promise<Response> {
                 })
             }
 
-            await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`);
+            await client.delete(`/media-folder/${root.findFolder(itenName)?.id}`)
         } else {
-            const media = await getMedia(client, root.id, itenName);
+            const media = await getMedia(client, root.id, itenName)
 
             if (media === null) {
                 return new Response('cannot find file by name', {
                     status: HTTPCode.NotFound,
-                });
+                })
             }
 
             try {
-                await client.delete(`/media/${media.id}`);
+                await client.delete(`/media/${media.id}`)
             } catch (e: any) {
                 if (typeof e.response !== 'undefined') {
                     if (e.response?.body?.errors[0]?.detail.indexOf('An exception occurred while executing') !== -1) {
@@ -426,22 +417,22 @@ export async function handleRequest(request: Request): Promise<Response> {
 
         return new Response(null, {
             status: HTTPCode.NoContent,
-        });
+        })
     }
 
     if (request.method === 'PUT') {
-        const { root, itenName } = await resolvePath(url.pathname, client);
+        const { root, itenName } = await resolvePath(url.pathname, client)
 
         if (root === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         }
 
-        const { fileName, fileExtension } = extractFileName(itenName);
+        const { fileName, fileExtension } = extractFileName(itenName)
 
         // The webdav client wants to create a empty file and later write here again.
         // We can't create a file at the remote with an empty body
         if (request.headers.get('content-length')?.toString() === '0') {
-            setCacheKey(shop.id, itenName, {
+            setCacheKey(shop.getShopId(), itenName, {
                 id: 'dummy',
                 fileName,
                 fileExtension,
@@ -449,88 +440,88 @@ export async function handleRequest(request: Request): Promise<Response> {
                 mimeType: 'text/plain',
                 url: 'dummy',
                 fileSize: 0,
-            });
+            })
 
-            return new Response('', { status: HTTPCode.Created });
+            return new Response('', { status: HTTPCode.Created })
         }
 
-        removeCacheKey(shop.id, itenName);
+        removeCacheKey(shop.getShopId(), itenName)
 
-        let media = await getMedia(client, root.id, itenName);
+        let media = await getMedia(client, root.id, itenName)
 
         if (media === null) {
             const newMediaElement = await client.post('/media?_response=true', {
                 mediaFolderId: root.id,
-            });
+            })
 
             media = newMediaElement.body.data as MediaEntity
         }
 
-        const search = new URLSearchParams();
-        search.set('fileName', fileName);
-        search.set('extension', fileExtension);
+        const search = new URLSearchParams()
+        search.set('fileName', fileName)
+        search.set('extension', fileExtension)
 
-        const resp = await fetch(`${shop.shopUrl}/api/_action/media/${media.id}/upload?${search.toString()}`, {
+        const resp = await fetch(`${shop.getShopUrl()}/api/_action/media/${media.id}/upload?${search.toString()}`, {
             body: request.body,
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${await client.getToken()}`,
                 Accept: 'application/json',
-            }
-        });
+            },
+        })
 
         if (!resp.ok) {
             // Cleanup empty media item
             try {
-                await client.delete(`/media/${media.id}`);
-            } catch (e) { }
+                await client.delete(`/media/${media.id}`)
+            } catch (e) {}
 
             return new Response('conflict', {
                 status: HTTPCode.BadRequest,
             })
         }
 
-        return new Response('', { status: HTTPCode.Created });
+        return new Response('', { status: HTTPCode.Created })
     }
 
     if (request.method === 'MOVE') {
-        const targetUrl = new URL(request.headers.get('Destination') as string);
+        const targetUrl = new URL(request.headers.get('Destination') as string)
 
-        let { root, itenName } = await resolvePath(url.pathname, client);
+        let { root, itenName } = await resolvePath(url.pathname, client)
 
         if (root === null) {
-            return new Response('', { status: HTTPCode.NotFound });
+            return new Response('', { status: HTTPCode.NotFound })
         }
 
         // Source is a folder
         if (root.findFolder(itenName)) {
-            const folder = root.findFolder(itenName) as Folder;
-            let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
+            const folder = root.findFolder(itenName) as Folder
+            let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot())
 
             await client.patch(`/media-folder/${folder.id}`, {
                 parentId: targetRoot?.id,
-                name: targetName
-            });
+                name: targetName,
+            })
         } else {
-            const media = await getMedia(client, root.id, itenName);
+            const media = await getMedia(client, root.id, itenName)
 
             if (media === null) {
-                return new Response('', { status: HTTPCode.NotFound });
+                return new Response('', { status: HTTPCode.NotFound })
             }
 
-            let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot());
+            let { root: targetRoot, itenName: targetName } = resolveRootOnFolder(targetUrl.pathname, root.getRoot())
 
             // Update folder if moved
             if (targetRoot!!.id !== root.id) {
                 await client.patch(`/media/${media.id}`, {
-                    mediaFolderId: targetRoot!!.id
-                });
+                    mediaFolderId: targetRoot!!.id,
+                })
             }
 
             // Update filename when changed
             if (itenName !== targetName) {
-                const { fileExtension: sourceExtension } = extractFileName(targetName);
-                const { fileName: newName, fileExtension: targetExtension } = extractFileName(targetName);
+                const { fileExtension: sourceExtension } = extractFileName(targetName)
+                const { fileName: newName, fileExtension: targetExtension } = extractFileName(targetName)
 
                 if (targetExtension !== sourceExtension) {
                     return new Response('conflict', {
@@ -539,15 +530,15 @@ export async function handleRequest(request: Request): Promise<Response> {
                 }
 
                 await client.post(`/_action/media/${media.id}/rename`, {
-                    fileName: newName
-                });
+                    fileName: newName,
+                })
             }
         }
 
-        return new Response('', { status: HTTPCode.Created });
+        return new Response('', { status: HTTPCode.Created })
     }
 
-    return response;
+    return response
 }
 
 function buildFile(folder: Folder, file: any): XMLBuilder {

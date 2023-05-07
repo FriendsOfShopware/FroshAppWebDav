@@ -1,0 +1,10 @@
+{
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+        "worker.js": true,
+        "worker.js.map": true,
+        "package-lock.json": true,
+    }
+}

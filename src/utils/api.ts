@@ -1,5 +1,5 @@
-import { HttpClient } from "shopware-app-server-sdk/component/http-client";
-import { extractFileName } from "./path";
+import { HttpClient } from '@friendsofshopware/app-server-sdk'
+import { extractFileName } from './path'
 
 export interface MediaEntity {
     id: string
@@ -7,9 +7,8 @@ export interface MediaEntity {
     fileSize: number
 }
 
-export async function getMedia(client: HttpClient, folderId: string|null, itenName: string): Promise<MediaEntity|null>
-{
-    const {fileExtension, fileName} = extractFileName(itenName);
+export async function getMedia(client: HttpClient, folderId: string | null, itenName: string): Promise<MediaEntity | null> {
+    const { fileExtension, fileName } = extractFileName(itenName)
 
     const result = await client.post('/search/media', {
         filter: [
@@ -25,20 +24,20 @@ export async function getMedia(client: HttpClient, folderId: string|null, itenNa
                     {
                         type: 'equals',
                         field: 'fileName',
-                        value: fileName
+                        value: fileName,
                     },
                     {
                         type: 'equals',
                         field: 'fileExtension',
-                        value: fileExtension
-                    }
-                ]
-            }
+                        value: fileExtension,
+                    },
+                ],
+            },
         ],
-    });
+    })
 
-    if (result.body.total === 0 ) {
-        return null;
+    if (result.body.total === 0) {
+        return null
     }
 
     return result.body.data[0] as MediaEntity

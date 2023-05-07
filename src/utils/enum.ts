@@ -11,4 +11,4 @@ export enum HTTPCode {
     Conflict = 409,
     Locked = 423,
     InternalServerError = 500,
- }
+}

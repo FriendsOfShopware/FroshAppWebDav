@@ -6,5 +6,8 @@
         "worker.js": true,
         "worker.js.map": true,
         "package-lock.json": true,
+    },
+    "yaml.schemas": {
+        "https://json.schemastore.org/github-workflow.json": "file:///c%3A/Users/shyim/Downloads/FroshAppWebDav/.github/workflows/deploy.yml"
     }
 }

@@ -10,8 +10,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@friendsofshopware/app-server-sdk": "^0.0.28",
-    "@friendsofshopware/app-server-sdk-cloudflare": "^0.0.28"
+    "@friendsofshopware/app-server-sdk": "^0.0.42",
+    "@friendsofshopware/app-server-sdk-cloudflare": "^0.0.42"
   },
   "devDependencies": {
     "esbuild": "0.17.18",

@@ -14,7 +14,7 @@
     "@friendsofshopware/app-server-sdk-cloudflare": "^0.0.42"
   },
   "devDependencies": {
-    "esbuild": "0.17.18",
+    "esbuild": "0.25.0",
     "@cloudflare/workers-types": "^4.20230404.0",
     "prettier": "^2.8.4",
     "ts-loader": "^9.4.2",
